@@ -1,1 +1,1 @@
-"# analisis_trafico" 
+# Análisis de tráfico utilizando redes neuronales para reconocimiento de vehículos y peatones.
