@@ -42,7 +42,7 @@ __C.TRAIN.SECOND_STAGE_EPOCHS   = 30
 # TEST options
 __C.TEST                      = edict()
 
-__C.TEST.ANNOT_PATH           = "./data/dataset/val2017.txt"
+__C.TEST.ANNOT_PATH           = "./data/dataset/reduced_val2017.txt"
 __C.TEST.BATCH_SIZE           = 2
 __C.TEST.INPUT_SIZE           = 416
 __C.TEST.DATA_AUG             = False
