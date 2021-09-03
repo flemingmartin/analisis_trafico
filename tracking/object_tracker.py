@@ -1,14 +1,6 @@
-#pila de centros
-from collections import deque
-
 import os
-# comment out below line to enable tensorflow logging outputs
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
 import tensorflow as tf
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
-if len(physical_devices) > 0:
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 from absl import app, flags, logging
 from absl.flags import FLAGS
 import core.utils as utils
@@ -19,6 +11,7 @@ from PIL import Image
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import deque
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
 import pafy
@@ -27,9 +20,57 @@ from deep_sort import preprocessing, nn_matching
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
+
+# comment out below line to enable tensorflow logging outputs
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+if len(physical_devices) > 0:
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+
+# ##### Definicion de parametros de entrada ##### #
+#
+# En esta seccion se detallan los parametros de entrada configurables del 
+# algoritmo, entre los que se encuentran:
+# 
+#   -regiones_path -> Direccion del fichero que contiene las regiones 
+#                     delimitadas por el usuario. default: regiones.txt
+#
+#   -weights       -> Direccion del archivo que contiene los pesos del modelo
+#                     ya transformado a un modelo de Tensorflow (para pasar de
+#                     un modelo YOLO a uno Tensorflow ver save_model.py)
+#
+#   -size          -> Tamaño de entrada de las imagenes. Debe coincidir con el
+#                     tamaño asignado a la hora de transformar el modelo
+#
+#   -tiny          -> Define si se trata de un modelo YOLO o un modelo YOLO Tiny
+#
+#   -model         -> Define si se va a utlizar YOLOv3 o YOLOv4. default: YOLOv4
+#
+#   -video         -> Dirección del video de entrada, puede ser un fichero, la
+#                     camara web del dispositivo enviando un 0, o bien un video
+#                     de youtube enviando el link del mismo.
+#
+#   -output        -> Dirección del video de salida. default: None (no guarda
+#                     la salida)
+#
+#   -output_format -> Define el formato del video de salida. default: XVID
+#
+#   -iou           -> Umbral de IoU
+#
+#   -score         -> Umbral de score o confianza
+#
+#   -dont_show     -> Enviar este parámetro para no mostrar el video de salida
+#                     mientras se realiza el procesamiento
+#
+#   -info          -> Muestra detalles de las detecciones a medida que realiza
+#                     el procesamiento
+#
+
+
 flags.DEFINE_string('regiones_path', 'regiones.txt','path of regiones txt file')
-flags.DEFINE_string('weights', './checkpoints/yolov4-640',
-                    'path to weights file')
+flags.DEFINE_string('weights', './checkpoints/yolov4-640','path to weights file')
 flags.DEFINE_integer('size', 640, 'resize images to')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
 flags.DEFINE_string('model', 'yolov4', 'yolov3 or yolov4')
@@ -41,51 +82,78 @@ flags.DEFINE_float('score', 0.50, 'score threshold')
 flags.DEFINE_boolean('dont_show', False, 'dont show video output')
 flags.DEFINE_boolean('info', False, 'show detailed info of tracked objects')
 
+
+# ######### pertenece_a_region ######### #
+#
+# Función que se encarga de determinar a qué region pertenece determinada 
+# coordenada pasada como parametro.
+# 
+# Entradas:
+#   -centro: coordenadas de entrada
+#   -regiones: conjunto de regiones definidas por el usuario
+#
+# Salida:
+#   La funcion retorna la region a la que pertenece el centro, y devuelve -1 si 
+#   este no pertenece a ninguna region
+#
+
+
 def pertenece_a_region(centro,regiones):
     for i,region in enumerate(regiones):
         if (centro[0] > region[0] and centro[0] < region[2]) and (centro[1] > region[1] and centro[1] < region[3]):
             return i
     return -1
 
+
+
+# ######### main ######### #
+#
+# Función que se encarga de realizar todo el procesamiento sobre el video de 
+# entrada, guarda el video de resultado en la ruta ingresada como parámetro, y 
+# guarda ademas la información recolectada del video, siendo esta la cantidad 
+# de autos por region en funicon del tiempo, y tambien todas las coordenadas de 
+# todos los autos detectados. Esto con la idea de realizar un analisis 
+# estadistico posterior a la ejecucion del programa 
+#
+
 def main(_argv):  
 
+    # Cargar regiones del archivo
     regiones = np.loadtxt(FLAGS.regiones_path,dtype=np.float32)
     cant_regiones = len(regiones)//4
     regiones = np.reshape(regiones,(cant_regiones,4))  
 
-    # Ojo al tejo con max_objects, se pica si el video es muuy largo
-    # La variable centros guarda los centros de cada auto
-    max_objects = 5000
-
-    # esta varialbe se incrementa en la posicion de la nueva region cuando
-    # un objeto cambia de region
+    # Variable que guarda el total de autos que pasaron por cada region
     total_por_region = [0]*(cant_regiones+1)
-
-    # para cada objeto, guarda todas las regiones que transitó en los ultimos frames
-    # esto para evitar el blinking de los objetos en los límites de las regiones
+    
+    # Variable que guarda para cada objeto, las regiones que transito en los 
+    # ultimos frames. Esto con el objetivo de evitar que un objeto que se 
+    # encuentra en el borde de una region se cuente varias veces
     historial_regiones = []
     len_historial = 20
 
+    # Variable que guarda todas las posiciones de todos los objetos detectados
     centros = []
+    
+    max_objects = 5000
     for i in range(max_objects):
         centros.append([-1])
         historial_regiones.append(deque([-2]*len_historial, maxlen=len_historial))
 
 
-    # Definition of the parameters
+    # Parametros de deep sort
     max_cosine_distance = 0.4
     nn_budget = None
     nms_max_overlap = 0.6
     
-    # initialize deep sort
+    # Inicializar deep sort
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename, batch_size=1)
-    # calculate cosine distance metric
     metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
-    # initialize tracker
+
     tracker = Tracker(metric)
 
-    # load configuration for object detector
+    # Cargar la configuracion
     config = ConfigProto()
     config.gpu_options.allow_growth = True
     session = InteractiveSession(config=config)
@@ -94,11 +162,11 @@ def main(_argv):
     video_path = FLAGS.video
 
  
-  
+    # Cargar el modelo
     saved_model_loaded = tf.saved_model.load(FLAGS.weights, tags=[tag_constants.SERVING])
     infer = saved_model_loaded.signatures['serving_default']
 
-    # begin video capture
+    # Comenzar captura del video
     if video_path[:4] == 'http':
         video = pafy.new(video_path)
         best = video.getbest(preftype="mp4")
@@ -110,27 +178,29 @@ def main(_argv):
         except:
             vid = cv2.VideoCapture(video_path)
 
+    # Configurar el output
     out = None
     width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    # get video ready to save locally if flag is set
+    
     if FLAGS.output:
-        # by default VideoCapture returns float instead of int
         fps = int(vid.get(cv2.CAP_PROP_FPS))
         codec = cv2.VideoWriter_fourcc(*FLAGS.output_format)
         out = cv2.VideoWriter(FLAGS.output, codec, fps, (width, height))
 
-    
+    # Desnormalizar las coordenadas de las regiones (0,1) -> (0,width)
     for i in range(cant_regiones):
         regiones[i,0] = int(regiones[i,0]*width)
         regiones[i,1] = int(regiones[i,1]*height)
         regiones[i,2] = int(regiones[i,2]*width)
         regiones[i,3] = int(regiones[i,3]*height)
 
+    # Variable que guarda la cantidad de objetos por region en funcion del tiempo 
     cant_por_region = []
     for i in range(cant_regiones+1):
         cant_por_region.append([0])
 
+    
     frame_num = 0
     fps_prom = 0
 
@@ -229,8 +299,10 @@ def main(_argv):
         tracker.predict()
         tracker.update(detections)
 
+        # Variable que guarda en tiempo real la cantidad de autos por region
         cant_por_region_aux = [0]*(cant_regiones+1)
-        # update tracks
+        
+        # Actualizar detecciones
         for track in tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue 
@@ -240,21 +312,22 @@ def main(_argv):
             if FLAGS.info:
                 print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(track.track_id), class_name, (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))))
 
-            #---------------------------PROBANDO---------------------------#
+            # Calcular el centro a partir de la caja contenedora
             centro = (int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2))
+
+            # Calcular region
             reg = pertenece_a_region(centro,regiones)
+
+            # Actualizar el contador de objetos por region
             cant_por_region_aux[reg] += 1;
 
-            color = colors_regiones[reg]
-            cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), color, 2)
-
+            # Guardar coordenada en el id del auto
             centros[track.track_id].append(centro)
             if (centros[track.track_id][0] == -1):
                 centros[track.track_id].pop(0)
-            
-            cv2.putText(frame, class_name + "-" + str(track.track_id),(centro[0]+10, centro[1]),0, 0.75, color,2)
-            size = 5
 
+            # Actualizar el total de objetos por region en funcion de si este 
+            # objeto ya estuvo o no en esta region en los ultimos frames
             hist = historial_regiones[track.track_id]
             if reg not in hist:
               if hist[-1] != -2:
@@ -262,25 +335,33 @@ def main(_argv):
                 total_por_region[reg]+=1
             hist.append(reg)
 
-            #for i,c in enumerate(centros[track.track_id][-30:]):
+            # Dibujar rectangulo en la imagen del color de la region
+            color = colors_regiones[reg]
+            cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), color, 2)
+            cv2.putText(frame, class_name + "-" + str(track.track_id),(centro[0]+10, centro[1]),0, 0.75, color,2)
+
+            # Dibujar recorrido del auto con puntos
+            # for i,c in enumerate(centros[track.track_id][-30:]):
             #    cv2.circle(frame,c,int(i*5/30),color,-1)
 
+        # Mostrar la cantidad de objetos en cada region en este instante
         for r in range(cant_regiones+1):
             frame = cv2.putText(frame,'Region '+str(r+1)+': '+str(int(cant_por_region_aux[r])),(20,(r+1)*40),cv2.FONT_HERSHEY_SIMPLEX,1,colors_regiones[r],3)
             cant_por_region[r].append(int(cant_por_region_aux[r]))
+        
+        # Mostrar el total de objetos en cada region
         for r in range(cant_regiones):
             frame = cv2.putText(frame,'Totales region '+str(r+1)+': '+str(int(total_por_region[r])),(width-500,(r+1)*40),cv2.FONT_HERSHEY_SIMPLEX,1,colors_regiones[r],3)
 
-        # calculate frames per second of running detections
+        # Calcular tiempos
         final_time = time.time() - start_time
         fps = 1.0 / final_time
         print("FPS: %.2f" % fps)
-
         fps_prom+=fps
 
+        # Mostrar y guardar salida
         result = np.asarray(frame)
         result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        
         if not FLAGS.dont_show:
             scale_percent = 60 # percent of original size
             dim = (int(result.shape[1] * scale_percent / 100), int(result.shape[0] * scale_percent / 100))
@@ -288,11 +369,11 @@ def main(_argv):
             # resize image
             resized = cv2.resize(result, dim, interpolation = cv2.INTER_AREA)
             cv2.imshow("Output Video", resized)
-        
-        # if output flag is set, save video file
         if FLAGS.output:
             out.write(result)
+
         if cv2.waitKey(1) & 0xFF == ord('q'): break
+        
     cv2.destroyAllWindows()
 
     with open("cant_por_region.txt", "w") as output:
