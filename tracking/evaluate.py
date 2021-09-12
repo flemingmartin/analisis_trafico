@@ -98,7 +98,7 @@ def main(_argv):
 
 
     num_lines = sum(1 for line in open(FLAGS.annotation_path))
-    with open(cfg.TEST.ANNOT_PATH, 'r') as annotation_file:
+    with open(FLAGS.annotation_path, 'r') as annotation_file:
         for num, line in enumerate(annotation_file):
             if num>num_lines:
                 break
