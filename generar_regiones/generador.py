@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from tkinter.filedialog import askopenfilename
 
 AZUL = (255,0,0)
 ROJO = (0,0,255)
@@ -11,9 +12,10 @@ GRIS = (128,128,128)
 
 COLORES = [ROJO,VERDE,AZUL,VIOLETA,AMARILLO,CYAN,GRIS]
 
-image_path = './data/usa.png'
-output_path = './data/usa_out.png'
-output_txt = './data/usa_out.txt'
+print("Select intersection image")
+image_path = askopenfilename()
+output_path = './data/output.png'
+output_txt = './data/output.txt'
 
 
 img = cv2.imread(image_path)
