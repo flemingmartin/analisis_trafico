@@ -7,20 +7,17 @@ VERDE = (0,255,0)
 VIOLETA = (255,0,255)
 AMARILLO = (0,255,255)
 CYAN = (255,255,0)
-BLANCO = (255,255,255)
+GRIS = (128,128,128)
 
-COLORES = [AZUL,VERDE,ROJO,VIOLETA,AMARILLO,CYAN,BLANCO]
+COLORES = [ROJO,VERDE,AZUL,VIOLETA,AMARILLO,CYAN,GRIS]
 
-
-	
-
-image_path = './data/imagen_prueba.png'
-output_path = './data/imagen_prueba_out.png'
-output_txt = './data/regiones.txt'
+image_path = './data/usa.png'
+output_path = './data/usa_out.png'
+output_txt = './data/usa_out.txt'
 
 
 img = cv2.imread(image_path)
-scale_percent = 60
+scale_percent = 80
 width = int(img.shape[1] * scale_percent / 100)
 height = int(img.shape[0] * scale_percent / 100)
 
@@ -79,6 +76,16 @@ def fill_alpha(coordenadas):
 	# Putting the image back to its position
 	img[y:y+h, x:x+w] = res
 
+def name_region(coordenadas,cant_regiones):
+	global img
+	x = int(coordenadas[0]*width)
+	y = int(coordenadas[1]*height)
+	w = int(coordenadas[2]*width - x)
+	h = int(coordenadas[3]*height - y)
+
+	cv2.rectangle(img, pt1=(x,y), pt2=(x+125, y+35),color=COLORES[cant_regiones],thickness=-1)
+	cv2.putText(img, "Region "+str(cant_regiones+1),(x+10, y+25),0, 0.75, (255,255,255),2)
+
 cv2.namedWindow('real image')
 cv2.setMouseCallback('real image', on_mouse, 0)
 
@@ -92,6 +99,7 @@ while True:
 	elif tecla==ord('y'):
 		print(f"Region {cant_regiones+1} agregada. Si desea finalizar, presione Enter")
 		fill_alpha(coordenadas)
+		name_region(coordenadas,cant_regiones)
 		cant_regiones+=1
 		aux_img = img.copy()
 		regiones.append(coordenadas)

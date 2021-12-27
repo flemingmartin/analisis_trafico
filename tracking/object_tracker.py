@@ -30,45 +30,45 @@ from tools import generate_detections as gdet
 
 
 
+'''
+##### Definicion de parametros de entrada ##### #
 
-# ##### Definicion de parametros de entrada ##### #
-#
-# En esta seccion se detallan los parametros de entrada configurables del 
-# algoritmo, entre los que se encuentran:
-# 
-#   -regiones_path -> Direccion del fichero que contiene las regiones 
-#                     delimitadas por el usuario. default: regiones.txt
-#
-#   -weights       -> Direccion del archivo que contiene los pesos del modelo
-#                     ya transformado a un modelo de Tensorflow (para pasar de
-#                     un modelo YOLO a uno Tensorflow ver save_model.py)
-#
-#   -size          -> Tamaño de entrada de las imagenes. Debe coincidir con el
-#                     tamaño asignado a la hora de transformar el modelo
-#
-#   -tiny          -> Define si se trata de un modelo YOLO o un modelo YOLO Tiny
-#
-#   -model         -> Define si se va a utlizar YOLOv3 o YOLOv4. default: YOLOv4
-#
-#   -video         -> Dirección del video de entrada, puede ser un fichero, la
-#                     camara web del dispositivo enviando un 0, o bien un video
-#                     de youtube enviando el link del mismo.
-#
-#   -output        -> Dirección del video de salida. default: None (no guarda
-#                     la salida)
-#
-#   -output_format -> Define el formato del video de salida. default: XVID
-#
-#   -iou           -> Umbral de IoU
-#
-#   -score         -> Umbral de score o confianza
-#
-#   -dont_show     -> Enviar este parámetro para no mostrar el video de salida
-#                     mientras se realiza el procesamiento
-#
-#   -info          -> Muestra detalles de las detecciones a medida que realiza
-#                     el procesamiento
-#
+En esta seccion se detallan los parametros de entrada configurables del 
+algoritmo, entre los que se encuentran:
+
+  -regiones_path -> Direccion del fichero que contiene las regiones 
+                    delimitadas por el usuario. default: regiones.txt
+
+  -weights       -> Direccion del archivo que contiene los pesos del modelo
+                    ya transformado a un modelo de Tensorflow (para pasar de
+                    un modelo YOLO a uno Tensorflow ver save_model.py)
+
+  -size          -> Tamaño de entrada de las imagenes. Debe coincidir con el
+                    tamaño asignado a la hora de transformar el modelo
+
+  -tiny          -> Define si se trata de un modelo YOLO o un modelo YOLO Tiny
+
+  -model         -> Define si se va a utlizar YOLOv3 o YOLOv4. default: YOLOv4
+
+  -video         -> Dirección del video de entrada, puede ser un fichero, la
+                    camara web del dispositivo enviando un 0, o bien un video
+                    de youtube enviando el link del mismo.
+
+  -output        -> Dirección del video de salida. default: None (no guarda
+                    la salida)
+
+  -output_format -> Define el formato del video de salida. default: XVID
+
+  -iou           -> Umbral de IoU
+
+  -score         -> Umbral de score o confianza
+
+  -dont_show     -> Enviar este parámetro para no mostrar el video de salida
+                    mientras se realiza el procesamiento
+
+  -info          -> Muestra detalles de las detecciones a medida que realiza
+                    el procesamiento
+'''
 
 
 flags.DEFINE_string('regiones_path', 'regiones.txt','path of regiones txt file')
@@ -85,22 +85,21 @@ flags.DEFINE_boolean('dont_show', False, 'dont show video output')
 flags.DEFINE_boolean('info', False, 'show detailed info of tracked objects')
 
 
-# ######### pertenece_a_region ######### #
-#
-# Función que se encarga de determinar a qué region pertenece determinada 
-# coordenada pasada como parametro.
-# 
-# Entradas:
-#   -centro: coordenadas de entrada
-#   -regiones: conjunto de regiones definidas por el usuario
-#
-# Salida:
-#   La funcion retorna la region a la que pertenece el centro, y devuelve -1 si 
-#   este no pertenece a ninguna region
-#
-
 
 def pertenece_a_region(centro,regiones):
+    '''
+    Función que se encarga de determinar a qué region pertenece determinada 
+    coordenada pasada como parametro.
+
+    Entradas:
+      -centro: coordenadas de entrada
+      -regiones: conjunto de regiones definidas por el usuario
+
+    Salida:
+      La funcion retorna la region a la que pertenece el centro, y devuelve -1 si 
+      este no pertenece a ninguna region
+    '''
+
     for i,region in enumerate(regiones):
         if (centro[0] > region[0] and centro[0] < region[2]) and (centro[1] > region[1] and centro[1] < region[3]):
             return i
@@ -108,17 +107,18 @@ def pertenece_a_region(centro,regiones):
 
 
 
-# ######### main ######### #
-#
-# Función que se encarga de realizar todo el procesamiento sobre el video de 
-# entrada, guarda el video de resultado en la ruta ingresada como parámetro, y 
-# guarda ademas la información recolectada del video, siendo esta la cantidad 
-# de autos por region en funicon del tiempo, y tambien todas las coordenadas de 
-# todos los autos detectados. Esto con la idea de realizar un analisis 
-# estadistico posterior a la ejecucion del programa 
-#
+
+    
 
 def main(_argv):  
+    '''
+    Función que se encarga de realizar todo el procesamiento sobre el video de 
+    entrada, guarda el video de resultado en la ruta ingresada como parámetro, y 
+    guarda ademas la información recolectada del video, siendo esta la cantidad 
+    de autos por region en funicon del tiempo, y tambien todas las coordenadas de 
+    todos los autos detectados. Esto con la idea de realizar un analisis 
+    estadistico posterior a la ejecucion del programa 
+    '''
 
     # Cargar regiones del archivo
     regiones = np.loadtxt(FLAGS.regiones_path,dtype=np.float32)
