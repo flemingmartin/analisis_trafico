@@ -55,6 +55,9 @@ Luego, es necesario definir las regiones de interés en nuestro caso particular.
 Para personalizar las regiones, se requiere contar con una imagen de la intersección, y ejecutar el script **generador.py** que se encuentra en la carpeta **generar_regiones** de la manera:
 
 ```
+cd generar_regiones
+```
+```
 python generador.py
 ```
 
@@ -66,6 +69,9 @@ Una vez instaladas las dependencias, y generadas las regiones, se deberá descar
 
 #### YOLOv4
 ```
+cd tracking
+```
+```
 wget https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights -P data/
 ```
 ```
@@ -73,6 +79,9 @@ python save_model.py
 ```
 
 #### YOLOv4-Tiny
+```
+cd tracking
+```
 ```
 wget https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v4_pre/yolov4-tiny.weights -P data/
 ```
